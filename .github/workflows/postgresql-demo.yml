@@ -1,0 +1,22 @@
+name: PostgreSQL demo
+
+on: pull_request
+
+permissions:
+  contents: read
+
+jobs:
+  demo:
+    name: Run PostgreSQL demo
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends g++ libpq-dev postgresql-16
+      - name: Run demo
+        run: ./demo/run.sh

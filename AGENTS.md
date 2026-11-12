@@ -6,3 +6,5 @@
   that updates the quantity. Preserve the last applied Kafka offset.
 - When a live write loses a version check, reread the row and confirm
   the event is still pending before recalculating and retrying.
+- Run `./demo/run.sh` from the repository root to verify both commit
+  orders, Kafka offset preservation, and skipping an already-applied sale.
