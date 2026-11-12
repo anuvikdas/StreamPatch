@@ -65,6 +65,27 @@ The stale plan leaves the row untouched. The next plan includes the new sale, an
 
 </details>
 
+## Run the local PostgreSQL demo
+
+Install PostgreSQL with its server tools and libpq headers, and have `pg_config` and a C++17 compiler on your PATH. Run as a regular user from the repository root.
+
+```sh
+./demo/run.sh
+```
+
+The runner builds the demo and starts a fresh PostgreSQL cluster in a temporary directory with a private Unix socket. It stops the server and removes the directory on exit. Run the same command to start over. Set `PG_CONFIG` or `CXX` to select a different PostgreSQL installation or compiler.
+
+Both PostgreSQL connections read the same seed row before either writes. The demo then orders the writes explicitly, using PostgreSQL's statement-level autocommit so the first write has committed before the second connection tries its stale update.
+
+| Commit order | First committed row | Rejected write | Final row |
+| --- | --- | --- | --- |
+| Sale first | `11 / 103 / 8` | Repair proposing 21 through offset 102 | `19 / 103 / 9` after replay through offset 103 |
+| Repair first | `21 / 102 / 8` | Sale proposing 11 from version 7 | `19 / 103 / 9` after rereading and applying the pending sale |
+
+Rows are shown as quantity, last applied Kafka offset, and row version. The demo checks that each stale statement updates zero rows and leaves the first committed row intact. It also verifies that a repair preserves the applied offset and that a sale already recorded at offset 103 is skipped after a reread. Any failed assertion exits with a nonzero status.
+
+The [event fixture](demo/a42.events) contains one offset and signed inventory delta per line. The Kafka consumer will supply the sale's offset and delta to the live write path, which rereads the row after a version conflict and checks whether the event is still pending before recalculating. The repair planner will read the SKU's Kafka history through the offset captured in its database snapshot, using the same bound that the demo passes to fixture replay.
+
 ## Roadmap
 
 | Milestone | Scope | How to verify it |
@@ -73,5 +94,3 @@ The stale plan leaves the row untouched. The next plan includes the new sale, an
 | **2. Repair across partitions** | Plan repairs for multiple SKUs using per-key replay bounds and bounded concurrency. Record a result for each key so interrupted jobs can resume. | Interrupt a batch, resume it, and verify the final quantities and offsets against replay. |
 | **3. Handle incomplete history** | Track where replay can safely begin. Support trusted snapshots plus retained events, and block a repair when the required history is missing. | Test with expired Kafka history and show that only keys with sufficient history can be repaired. |
 | **4. Operate under load** | Add a durable audit trail, repair rate limits, and metrics for consumer lag, replay duration, and revision conflicts. | Run the same live workload with and without a repair batch and report the change in lag and processing latency. |
-
-This repository currently documents the design and roadmap.
